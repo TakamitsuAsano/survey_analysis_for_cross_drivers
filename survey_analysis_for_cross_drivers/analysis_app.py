@@ -609,13 +609,27 @@ if df is not None:
         ai_input = st.text_area("ここにGeminiの回答を貼り付けてください", height=300)
 
         if ai_input:
+            # --- 【修正】どんな形式でも確実にJSONブロックを抽出するための正規表現 ---
+            # 1. ```json ... ``` のパターン
+            # 2. { "cross_tab" ... } が含まれる一番外側の括弧のパターン
             json_match = re.search(r'```json\s*({.*?})\s*```', ai_input, re.DOTALL)
             
+            config_str = None
             if json_match:
+                config_str = json_match.group(1)
+            else:
+                # マークダウンの囲みがない場合、波括弧 { } で囲まれた全体を探す
+                # 念のため "cross_tab" というキーが含まれている部分を起点にする
+                fallback_match = re.search(r'\{.*"cross_tab".*\}', ai_input, re.DOTALL)
+                if fallback_match:
+                    config_str = fallback_match.group(0)
+
+            if config_str:
                 try:
-                    config = json.loads(json_match.group(1))
+                    config = json.loads(config_str)
                     st.success("✅ AIからの設定データを読み取りました！以下のおすすめパターンから選択してください。")
                     
+                    # --- AI設定UIの並び順もタブの順序に合わせる ---
                     col_ai_1, col_ai_2 = st.columns(2)
                     
                     if "cross_tab" in config and isinstance(config['cross_tab'], list):
@@ -683,8 +697,8 @@ if df is not None:
                                         args=(valid_feats_cluster,)
                                     )
 
-                except json.JSONDecodeError:
-                    st.error("JSONの形式が正しくありません。")
+                except json.JSONDecodeError as e:
+                    st.error(f"JSONの解析に失敗しました。AIの出力が正しいフォーマットか確認してください。\n詳細エラー: {e}")
             else:
                 st.warning("設定データ(JSON)が見つかりません。プロンプトの指示通りにGeminiが出力しているか確認してください。")
 
