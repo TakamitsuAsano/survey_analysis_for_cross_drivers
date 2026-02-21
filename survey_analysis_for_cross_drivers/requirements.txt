@@ -1,9 +1,0 @@
-streamlit
-pandas
-plotly
-scikit-learn
-matplotlib
-openpyxl
-st-gsheets-connection
-st-copy-to-clipboard
-graphviz
