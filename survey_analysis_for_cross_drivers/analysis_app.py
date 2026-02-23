@@ -93,6 +93,23 @@ def get_decision_tree_data(clf, feature_names, class_names):
     
     return pd.DataFrame(data)
 
+# --- JSONパース用ユーティリティ関数 ---
+def extract_json_config(text):
+    json_match = re.search(r'```json\s*({.*?})\s*```', text, re.DOTALL)
+    config_str = None
+    if json_match:
+        config_str = json_match.group(1)
+    else:
+        fallback_match = re.search(r'\{.*\}', text, re.DOTALL)
+        if fallback_match:
+            config_str = fallback_match.group(0)
+    if config_str:
+        try:
+            return json.loads(config_str)
+        except json.JSONDecodeError:
+            return None
+    return None
+
 # --- コールバック関数群 (Tab7用) ---
 def cb_update_cross(idx, col):
     st.session_state["sb_cross_index"] = idx
@@ -454,95 +471,33 @@ if df is not None:
     # --- タブ6: 解説 ---
     with tab6:
         st.header("📖 統計分析手法の解説ガイド")
-        st.markdown("""
-        このアプリで使用している分析手法について、「専門的な説明（Technical）」と「わかりやすい説明（Plain）」を併記しています。
-        報告書作成やプレゼンテーションの際にご活用ください。
-        """)
-        
-        st.divider()
+        st.markdown("（詳細は省略します。）")
+        st.info("詳しい解説は「分析手法の解説」タブをご参照ください。")
 
-        # 1. クロス集計
-        st.subheader("1. クロス集計 (Cross Tabulation)")
-        with st.expander("詳細を見る"):
-            st.markdown("""
-            #### 🛠 使用メソッド・原理
-            * **手法**: 分割表 (Contingency Table) の作成
-            * **統計的背景**: 2つの変数（質問項目）の間に「関連があるか」を見るために使用します。厳密には「カイ二乗検定 (Chi-square test)」を用いて、その偏りが偶然かどうかを判断することが一般的です。
-
-            #### 💡 わかりやすい説明
-            * **これ何？**: 「年代別 × 満足度」のように、2つの質問を掛け合わせて表にする最も基本的な分析です。
-            * **目的**: 全体だけでは見えない、特定の属性（男女、年代など）ごとの違いを発見します。
-            * **「有意差（意味のある差）」の目安**:
-                * 一般的に、比較したいグループ間で **10%以上の差** があれば、「差がある」と見なして良いケースが多いです（マーケティング現場レベル）。
-            """)
-
-        # 2. ドライバー分析
-        st.subheader("2. ドライバー分析 / 要因分析")
-        with st.expander("詳細を見る"):
-            st.markdown("""
-            #### 🛠 使用メソッド・原理
-            * **手法**: **ロジスティック回帰分析 (Logistic Regression)**
-            * **アルゴリズム**: scikit-learnの `LogisticRegression` を使用。
-            * **統計的背景**: 結果が「Yes/No（買った/買わない）」のような2値データの場合、通常の回帰分析は使えません。そこで「確率」を予測するロジスティック回帰を用います。
-            * **係数の変換**: 算出された「偏回帰係数」を、指数変換（$e^x$）することで **「オッズ比 (Odds Ratio)」** に変換して表示しています。
-
-            #### 💡 わかりやすい説明
-            * **これ何？**: ある結果（例：商品を買った）に対して、どの要因がどれくらい影響したかを数値化する手法です。
-            * **目的**: 施策の優先順位を決めるためです。「これを改善すれば、結果がこれだけ伸びる」というレバーを見つけます。
-            * **「オッズ比」とは？**:
-                * 結果の**「起こりやすさ」が何倍になるか**を表す数値です。
-                * **1.0**: 影響なし（プラマイゼロ）。
-                * **2.0**: その要素があると、結果が **2倍** 起こりやすくなる（強い促進要因）。
-                * **0.5**: その要素があると、結果が **半分** しか起きなくなる（強い阻害要因）。
-            """)
-
-        # 3. 決定木分析
-        st.subheader("3. 決定木分析 (Decision Tree)")
-        with st.expander("詳細を見る"):
-            st.markdown("""
-            #### 🛠 使用メソッド・原理
-            * **手法**: **CART法 (Classification and Regression Trees)**
-            * **アルゴリズム**: scikit-learnの `DecisionTreeClassifier` を使用。
-            * **統計的背景**: データを分割する際、**「Gini不純度 (Gini Impurity)」** という指標を使っています。これは「どれだけ綺麗にYes/Noが分かれたか」を計算するもので、この不純度が最も低くなる条件を探して自動的に分岐を作っています。
-
-            #### 💡 わかりやすい説明
-            * **これ何？**: 「もしAならB、そうでなければC」というように、結果に至る条件をツリー状に分解する手法です。
-            * **目的**: 複雑な要因を整理し、**「一番影響力が大きい条件は何か？」**を視覚的に見つけるために使います。
-            * **見方**:
-                * **一番上の分岐**: これが**最も重要な要因**です。ここを見るだけで、結果を左右する最大のポイントがわかります。
-            """)
-
-        # 4. クラスター分析
-        st.subheader("4. クラスター分析 (Cluster Analysis)")
-        with st.expander("詳細を見る"):
-            st.markdown("""
-            #### 🛠 使用メソッド・原理
-            * **手法**: **K-Means法 (K-平均法 / 非階層クラスター分析)**
-            * **アルゴリズム**: scikit-learnの `KMeans` を使用。
-            * **統計的背景**: データを $k$ 個のグループに分ける際、各グループの中心（重心）からの距離が最小になるように計算します。教師なし学習（正解データがいらない分析）の一種です。
-
-            #### 💡 わかりやすい説明
-            * **これ何？**: 回答パターンが似ている人を集めて、自動的にグループ（チーム）を作る手法です。
-            * **目的**: 「セグメンテーション（顧客分類）」を行うためです。性別や年代だけでなく、「意識」や「行動」で分類することで、より刺さるメッセージを作れます。
-            * **使い方のコツ**: 
-                * 要因分析で「重要だ」とわかった項目を使ってクラスターを作ると、意味のあるグループができやすいです。
-                * グループ名は、ヒートマップを見て人間が考えます（例：「価格重視派」「品質重視派」など）。
-            """)
-
-    # --- タブ7: AI分析アシスト ---
+    # --- タブ7: AI分析アシスト (細分化版) ---
     with tab7:
         st.header("🤖 AI分析アシスト")
+        st.markdown("長文やトークン制限によるエラーを防ぐため、分析手法ごとにプロンプトを分割しています。目的のタブを開いて、AIに指示を出してください。")
         
-        st.subheader("Step 1: プロンプトをコピー")
-        st.markdown("以下のプロンプトをコピーして、GeminiやChatGPTに**CSVファイルを添付**した状態で送信してください。")
+        ai_tab1, ai_tab2, ai_tab3, ai_tab4 = st.tabs([
+            "📈 クロス集計", 
+            "🚀 ドライバー分析", 
+            "🌳 決定木分析", 
+            "🧩 クラスター分析"
+        ])
 
-        ai_prompt_text = """# 【絶対遵守のルール】
+        # ==========================================
+        # クロス集計用 AIアシスト
+        # ==========================================
+        with ai_tab1:
+            st.subheader("Step 1: クロス集計用プロンプトをコピー")
+            prompt_cross = """# 【絶対遵守のルール】
 - ユーザーに「長くなるので省略します」「代表的なトップ3を挙げます」といった要約や省略を**絶対にしないでください**。
 - 条件に合致する結果が見つかった場合、**見つかった数だけ、すべて漏らさず列挙**してください。
 
 # 依頼
 添付のアンケートデータを分析し、マーケティング戦略立案のための詳細なレポートを作成してください。
-以下の4つの分析手法を用いて、トップライン（全体傾向）だけでなく、顕著な特徴や興味深い相関を「すべて網羅的に」抽出してください。
+今回は**「クロス集計」**による分析のみを行います。
 
 # 分析手法と観点
 1. **クロス集計**
@@ -550,27 +505,13 @@ if df is not None:
    - 各意識・満足度のTop2（肯定派）の割合の差分が15%以上見られた組み合わせを**すべて**抽出してください。
    - さらに、Bottom2（否定派）の割合の差分が15%以上見られる組み合わせも**すべて**抽出してください。
 
-2. **ドライバー分析（ロジスティック回帰）**
-   - **⚠️重要: アンケート内にある「状態や意識を問う設問（例：愛着、住みやすさ、幸せ、良くしたい、評判が良い等）」を【すべて（最低でも5項目以上）】個別の目的変数として設定し、それぞれ回帰分析を行ってください。**
-   - 説明変数：地域要素や満足度に関する設問（Q6系など）をすべて投入してください。
-   - それぞれの目的変数に対し、P値が有意（< 0.05）なもののうち、オッズ比が1.0より大きくプラスの影響を与えている要素をランキング化してすべて列挙してください。
-   - 同時に、オッズ比が0.8以下のマイナス（ネガティブ）の影響を与えている要素も分けてすべて列挙してください。
-
-3. **決定木分析**
-   - 目的変数：上記で設定した意識に関する重要指標（5項目以上）
-   - どのような条件が重なると、その重要指標が高くなる（または低くなる）かの分岐ルールを見つけてください。
-
-4. **クラスター分析**
-   - 回答傾向が似ている回答者をグルーピング（3〜5グループ程度）してください。
-   - 各グループの特徴（何に満足し、何に不満か）と、命名（ペルソナ名）を行ってください。
-
 # 出力形式
 1. **分析サマリー（人間が読む用）**
-   - 各分析ごとに見出しを立て、箇条書きで詳細を記述してください。
+   - 見出しを立て、箇条書きで詳細を記述してください。
 
 2. **アプリ連携用設定データ（JSON形式）**
-   - **最後に必ず**、以下のJSON形式で各分析ごとに設定パターンを抽出してください。
-   - **⚠️【重要】「ドライバー分析」については、分析したすべての目的変数（最低でも5項目以上）をJSONのリストに含めてください。絶対に3つで省略しないでください。**
+   - **最後に必ず**、以下のJSON形式で設定パターンを抽出してください。
+   - **⚠️【重要】分析サマリーで見つけたすべての組み合わせをJSONのリストに含めてください。絶対に見つかった数だけ出力してください。**
    - **列名は、CSVのヘッダーにある正確な名称を使用してください。**
 
 ```json
@@ -579,123 +520,213 @@ if df is not None:
     {"index": "列名A", "columns": "列名B"},
     {"index": "列名C", "columns": "列名D"}
     // ... 見つけた数だけすべて記述する
-  ],
+  ]
+}
+```"""
+            st_copy_to_clipboard(prompt_cross, "📋 クロス集計プロンプトをコピー", "✅ コピーしました！")
+            with st.expander("プロンプトの中身を確認", expanded=False):
+                st.code(prompt_cross, language="markdown")
+            
+            st.divider()
+            st.subheader("Step 2: AIの回答を貼り付け")
+            ai_input_cross = st.text_area("ここにAIの回答（最後のJSONまで含む）を貼り付けてください", height=200, key="ta_cross")
+            
+            if ai_input_cross:
+                config = extract_json_config(ai_input_cross)
+                if config and "cross_tab" in config and isinstance(config['cross_tab'], list):
+                    st.success("✅ 設定データを読み取りました！")
+                    st.write(f"### 📈 クロス集計のおすすめ（{len(config['cross_tab'])}件）")
+                    cols = st.columns(2)
+                    for i, setting in enumerate(config['cross_tab']):
+                        col = cols[i % 2]
+                        with col.expander(f"パターン {i+1}: {setting.get('index')} × {setting.get('columns')}", expanded=False):
+                            st.write(f"**行**: {setting.get('index')}")
+                            st.write(f"**列**: {setting.get('columns')}")
+                            st.button(f"パターン{i+1}を適用", key=f"btn_cross_{i}", on_click=cb_update_cross, args=(setting.get('index'), setting.get('columns')))
+                elif config:
+                    st.warning("JSONは読み取れましたが、'cross_tab' の設定が見つかりません。")
+                else:
+                    st.error("JSONデータの読み取りに失敗しました。")
+
+        # ==========================================
+        # ドライバー分析用 AIアシスト
+        # ==========================================
+        with ai_tab2:
+            st.subheader("Step 1: ドライバー分析用プロンプトをコピー")
+            prompt_reg = """# 【絶対遵守のルール】
+- ユーザーに「長くなるので省略します」「代表的なトップ3を挙げます」といった要約や省略を**絶対にしないでください**。
+- 条件に合致する結果が見つかった場合、**見つかった数だけ、すべて漏らさず列挙**してください。
+
+# 依頼
+添付のアンケートデータを分析し、マーケティング戦略立案のための詳細なレポートを作成してください。
+今回は**「ドライバー分析（ロジスティック回帰）」**による分析のみを行います。
+
+# 分析手法と観点
+1. **ドライバー分析（ロジスティック回帰）**
+   - **⚠️重要: アンケート内にある「状態や意識を問う設問（例：愛着、住みやすさ、幸せ、良くしたい、評判が良い等）」を【すべて（最低でも5項目以上）】個別の目的変数として設定し、それぞれ回帰分析を行ってください。**
+   - 説明変数：地域要素や満足度に関する設問（Q6系など）をすべて投入してください。
+   - それぞれの目的変数に対し、P値が有意（< 0.05）なもののうち、オッズ比が1.0より大きくプラスの影響を与えている要素をランキング化してすべて列挙してください。
+   - 同時に、オッズ比が0.8以下のマイナス（ネガティブ）の影響を与えている要素も分けてすべて列挙してください。
+
+# 出力形式
+1. **分析サマリー（人間が読む用）**
+   - 見出しを立て、箇条書きで詳細を記述してください。
+
+2. **アプリ連携用設定データ（JSON形式）**
+   - **最後に必ず**、以下のJSON形式で設定パターンを抽出してください。
+   - **⚠️【重要】分析したすべての目的変数（最低でも5項目以上）をJSONのリストに含めてください。絶対に省略しないでください。**
+   - **列名は、CSVのヘッダーにある正確な名称を使用してください。**
+
+```json
+{
   "driver_analysis": [
     {"target": "意識設問1", "features": ["説明変数1", "説明変数2", "説明変数3"]},
-    {"target": "意識設問2", "features": ["説明変数1", "説明変数4"]},
-    {"target": "意識設問3", "features": ["説明変数2", "説明変数5"]},
-    {"target": "意識設問4", "features": ["説明変数1", "説明変数6"]},
-    {"target": "意識設問5", "features": ["説明変数3", "説明変数7"]}
-    // ... 分析した目的変数の数だけすべて（最低5つ以上）記述する
-  ],
+    {"target": "意識設問2", "features": ["説明変数1", "説明変数4"]}
+    // ... 分析した目的変数の数だけすべて記述する
+  ]
+}
+```"""
+            st_copy_to_clipboard(prompt_reg, "📋 ドライバー分析プロンプトをコピー", "✅ コピーしました！")
+            with st.expander("プロンプトの中身を確認", expanded=False):
+                st.code(prompt_reg, language="markdown")
+            
+            st.divider()
+            st.subheader("Step 2: AIの回答を貼り付け")
+            ai_input_reg = st.text_area("ここにAIの回答（最後のJSONまで含む）を貼り付けてください", height=200, key="ta_reg")
+            
+            if ai_input_reg:
+                config = extract_json_config(ai_input_reg)
+                if config and "driver_analysis" in config and isinstance(config['driver_analysis'], list):
+                    st.success("✅ 設定データを読み取りました！")
+                    st.write(f"### 🚀 ドライバー分析のおすすめ（{len(config['driver_analysis'])}件）")
+                    cols = st.columns(2)
+                    for i, setting in enumerate(config['driver_analysis']):
+                        tgt = setting.get('target')
+                        feats = setting.get('features', [])
+                        col = cols[i % 2]
+                        with col.expander(f"パターン {i+1}: {tgt}", expanded=False):
+                            st.write(f"**目的**: {tgt}")
+                            st.caption(f"**要因**: {', '.join(feats)}")
+                            valid_feats_reg = [f for f in feats if f in df.columns]
+                            st.button(f"パターン{i+1}を適用", key=f"btn_reg_{i}", on_click=cb_update_reg, args=(tgt, valid_feats_reg))
+                elif config:
+                    st.warning("JSONは読み取れましたが、'driver_analysis' の設定が見つかりません。")
+                else:
+                    st.error("JSONデータの読み取りに失敗しました。")
+
+        # ==========================================
+        # 決定木分析用 AIアシスト
+        # ==========================================
+        with ai_tab3:
+            st.subheader("Step 1: 決定木分析用プロンプトをコピー")
+            prompt_tree = """# 依頼
+添付のアンケートデータを分析し、マーケティング戦略立案のための詳細なレポートを作成してください。
+今回は**「決定木分析」**による分析のみを行います。
+
+# 分析手法と観点
+1. **決定木分析**
+   - 目的変数：「状態」や「体感・満足度」「推奨意向」を測る指標や「生活習慣・行動」への影響などの重要指標を複数設定してください。
+   - どのような条件が重なると、その重要指標が高くなる（または低くなる）かの分岐ルールを見つけてください。
+
+# 出力形式
+1. **分析サマリー（人間が読む用）**
+   - 見出しを立て、箇条書きで詳細を記述してください。
+
+2. **アプリ連携用設定データ（JSON形式）**
+   - **最後に必ず**、以下のJSON形式で3つ以上の設定パターンを抽出してください。
+   - **列名は、CSVのヘッダーにある正確な名称を使用してください。**
+
+```json
+{
   "decision_tree": [
-    {"target": "意識設問1", "features": ["説明変数1", "説明変数2", "説明変数3"]},
-    {"target": "意識設問2", "features": ["説明変数1", "説明変数4", "説明変数5"]}
-    // ...
-  ],
+    {"target": "目的変数A", "features": ["説明変数1", "説明変数2", "説明変数3"]},
+    {"target": "目的変数B", "features": ["説明変数1", "説明変数4", "説明変数5"]}
+  ]
+}
+```"""
+            st_copy_to_clipboard(prompt_tree, "📋 決定木プロンプトをコピー", "✅ コピーしました！")
+            with st.expander("プロンプトの中身を確認", expanded=False):
+                st.code(prompt_tree, language="markdown")
+            
+            st.divider()
+            st.subheader("Step 2: AIの回答を貼り付け")
+            ai_input_tree = st.text_area("ここにAIの回答（最後のJSONまで含む）を貼り付けてください", height=200, key="ta_tree")
+            
+            if ai_input_tree:
+                config = extract_json_config(ai_input_tree)
+                if config and "decision_tree" in config and isinstance(config['decision_tree'], list):
+                    st.success("✅ 設定データを読み取りました！")
+                    st.write(f"### 🌳 決定木のおすすめ（{len(config['decision_tree'])}件）")
+                    cols = st.columns(2)
+                    for i, setting in enumerate(config['decision_tree']):
+                        tgt = setting.get('target')
+                        feats = setting.get('features', [])
+                        col = cols[i % 2]
+                        with col.expander(f"パターン {i+1}: {tgt}", expanded=False):
+                            st.write(f"**目的**: {tgt}")
+                            st.caption(f"**要因**: {', '.join(feats)}")
+                            valid_feats = [f for f in feats if f in df.columns]
+                            st.button(f"パターン{i+1}を適用", key=f"btn_tree_{i}", on_click=cb_update_tree, args=(tgt, valid_feats))
+                elif config:
+                    st.warning("JSONは読み取れましたが、'decision_tree' の設定が見つかりません。")
+                else:
+                    st.error("JSONデータの読み取りに失敗しました。")
+
+        # ==========================================
+        # クラスター分析用 AIアシスト
+        # ==========================================
+        with ai_tab4:
+            st.subheader("Step 1: クラスター分析用プロンプトをコピー")
+            prompt_cluster = """# 依頼
+添付のアンケートデータを分析し、マーケティング戦略立案のための詳細なレポートを作成してください。
+今回は**「クラスター分析」**による分析のみを行います。
+
+# 分析手法と観点
+1. **クラスター分析**
+   - 回答傾向が似ている回答者をグルーピング（3〜5グループ程度）してください。
+   - 各グループの特徴（何に満足し、何に不満か）と、命名（ペルソナ名）を行ってください。
+
+# 出力形式
+1. **分析サマリー（人間が読む用）**
+   - 見出しを立て、箇条書きで詳細を記述してください。
+
+2. **アプリ連携用設定データ（JSON形式）**
+   - **最後に必ず**、以下のJSON形式で3つ以上の設定パターン（使用する変数の組み合わせとクラスター数）を抽出してください。
+   - **列名は、CSVのヘッダーにある正確な名称を使用してください。**
+
+```json
+{
   "clustering": [
     {"features": ["変数1", "変数2", "変数3"], "n_clusters": 4},
     {"features": ["変数1", "変数4", "変数5"], "n_clusters": 3}
   ]
 }
 ```"""
-        st_copy_to_clipboard(ai_prompt_text, "📋 プロンプトをコピー", "✅ コピーしました！")
-        st.code(ai_prompt_text, language="markdown")
-        
-        st.divider()
-
-        st.subheader("Step 2: AIの回答を貼り付け")
-        st.markdown("AIが出力した**分析サマリー全体（最後のJSONまで含む）**をここに貼り付けてください。")
-
-        ai_input = st.text_area("ここにGeminiの回答を貼り付けてください", height=300)
-
-        if ai_input:
-            json_match = re.search(r'```json\s*({.*?})\s*```', ai_input, re.DOTALL)
+            st_copy_to_clipboard(prompt_cluster, "📋 クラスター分析プロンプトをコピー", "✅ コピーしました！")
+            with st.expander("プロンプトの中身を確認", expanded=False):
+                st.code(prompt_cluster, language="markdown")
             
-            config_str = None
-            if json_match:
-                config_str = json_match.group(1)
-            else:
-                fallback_match = re.search(r'\{.*"cross_tab".*\}', ai_input, re.DOTALL)
-                if fallback_match:
-                    config_str = fallback_match.group(0)
-
-            if config_str:
-                try:
-                    config = json.loads(config_str)
-                    st.success("✅ AIからの設定データを読み取りました！以下のおすすめパターンから選択してください。")
-                    
-                    col_ai_1, col_ai_2 = st.columns(2)
-                    
-                    if "cross_tab" in config and isinstance(config['cross_tab'], list):
-                        with col_ai_1:
-                            st.write(f"### 📈 クロス集計のおすすめ（{len(config['cross_tab'])}件）")
-                            for i, setting in enumerate(config['cross_tab']):
-                                with st.expander(f"パターン {i+1}: {setting.get('index')} × {setting.get('columns')}", expanded=False):
-                                    st.write(f"**行**: {setting.get('index')}")
-                                    st.write(f"**列**: {setting.get('columns')}")
-                                    st.button(
-                                        f"パターン{i+1}を適用",
-                                        key=f"btn_cross_{i}",
-                                        on_click=cb_update_cross,
-                                        args=(setting.get('index'), setting.get('columns'))
-                                    )
-
-                    if "driver_analysis" in config and isinstance(config['driver_analysis'], list):
-                        with col_ai_2:
-                            st.write(f"### 🚀 ドライバー分析のおすすめ（{len(config['driver_analysis'])}件）")
-                            for i, setting in enumerate(config['driver_analysis']):
-                                tgt = setting.get('target')
-                                feats = setting.get('features', [])
-                                with st.expander(f"パターン {i+1}: {tgt}", expanded=False):
-                                    st.write(f"**目的**: {tgt}")
-                                    st.caption(f"**要因**: {', '.join(feats)}")
-                                    valid_feats_reg = [f for f in feats if f in df.columns]
-                                    st.button(
-                                        f"パターン{i+1}を適用",
-                                        key=f"btn_reg_{i}",
-                                        on_click=cb_update_reg,
-                                        args=(tgt, valid_feats_reg)
-                                    )
-
-                    col_ai_3, col_ai_4 = st.columns(2)
-
-                    if "decision_tree" in config and isinstance(config['decision_tree'], list):
-                        with col_ai_3:
-                            st.write(f"### 🌳 決定木のおすすめ（{len(config['decision_tree'])}件）")
-                            for i, setting in enumerate(config['decision_tree']):
-                                tgt = setting.get('target')
-                                feats = setting.get('features', [])
-                                with st.expander(f"パターン {i+1}: {tgt}", expanded=False):
-                                    st.write(f"**目的**: {tgt}")
-                                    st.caption(f"**要因**: {', '.join(feats)}")
-                                    valid_feats = [f for f in feats if f in df.columns]
-                                    st.button(
-                                        f"パターン{i+1}を適用",
-                                        key=f"btn_tree_{i}",
-                                        on_click=cb_update_tree,
-                                        args=(tgt, valid_feats)
-                                    )
-
-                    if "clustering" in config and isinstance(config['clustering'], list):
-                        with col_ai_4:
-                            st.write(f"### 🧩 クラスター分析のおすすめ（{len(config['clustering'])}件）")
-                            for i, setting in enumerate(config['clustering']):
-                                feats = setting.get('features', [])
-                                with st.expander(f"パターン {i+1}: {len(feats)}変数で分類", expanded=False):
-                                    st.caption(f"**変数**: {', '.join(feats)}")
-                                    valid_feats_cluster = [f for f in feats if f in df.columns]
-                                    st.button(
-                                        f"パターン{i+1}を適用",
-                                        key=f"btn_cluster_{i}",
-                                        on_click=cb_update_cluster,
-                                        args=(valid_feats_cluster,)
-                                    )
-
-                except json.JSONDecodeError as e:
-                    st.error(f"JSONの解析に失敗しました。AIの出力が正しいフォーマットか確認してください。\n詳細エラー: {e}")
-            else:
-                st.warning("設定データ(JSON)が見つかりません。プロンプトの指示通りにGeminiが出力しているか確認してください。")
+            st.divider()
+            st.subheader("Step 2: AIの回答を貼り付け")
+            ai_input_cluster = st.text_area("ここにAIの回答（最後のJSONまで含む）を貼り付けてください", height=200, key="ta_cluster")
+            
+            if ai_input_cluster:
+                config = extract_json_config(ai_input_cluster)
+                if config and "clustering" in config and isinstance(config['clustering'], list):
+                    st.success("✅ 設定データを読み取りました！")
+                    st.write(f"### 🧩 クラスター分析のおすすめ（{len(config['clustering'])}件）")
+                    cols = st.columns(2)
+                    for i, setting in enumerate(config['clustering']):
+                        feats = setting.get('features', [])
+                        col = cols[i % 2]
+                        with col.expander(f"パターン {i+1}: {len(feats)}変数で分類", expanded=False):
+                            st.caption(f"**変数**: {', '.join(feats)}")
+                            valid_feats_cluster = [f for f in feats if f in df.columns]
+                            st.button(f"パターン{i+1}を適用", key=f"btn_cluster_{i}", on_click=cb_update_cluster, args=(valid_feats_cluster,))
+                elif config:
+                    st.warning("JSONは読み取れましたが、'clustering' の設定が見つかりません。")
+                else:
+                    st.error("JSONデータの読み取りに失敗しました。")
 
 else:
     st.info("👈 左側のサイドバーからデータを選択してください。")
